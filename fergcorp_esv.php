@@ -25,7 +25,8 @@ Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA 02110-1301, USA.
 Class Fergcorp_ESV {
 	
 	private $ESV_BASE_URL	= "http://www.esvapi.org/v2/rest/";
-	private $ESV_KEY			= "IP";
+	private $ESV_KEY		= "IP";
+	private $NO_RESULT		= "ERROR: No results were found for your search.";
 	
 	/**
 	 * Default construct to initialize settings required no matter what
@@ -71,6 +72,12 @@ Class Fergcorp_ESV {
 		}
 		
 		return $this->query_source($this->build_query($passage), "passageQuery");
+		if($get_passage != -1){
+			return $get_passage;
+		}
+		else{
+			return $passage;
+		}
 	}
 	
 	
@@ -98,7 +105,12 @@ Class Fergcorp_ESV {
 		  $body = $response['body']; // use the content
 		}
 		
-		return $body;
+		if($body == $this->NO_RESULT)
+			return -1;
+		else{
+			return $body;
+		}
+		
 		
 	}
 	
