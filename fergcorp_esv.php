@@ -52,9 +52,12 @@ Class Fergcorp_ESV {
 	function shortcode_esv($atts) {
 		extract(shortcode_atts(array(
 								'passage' => FALSE,
+								'include_passage_references' => TRUE,
+								'copyright' => 'long'
+								
 								),
 								$atts));
-		return $this->get_passage($passage);
+		return $this->get_passage($passage, $include_passage_references, $copyright);
 	}
 	
 	/**
@@ -66,12 +69,12 @@ Class Fergcorp_ESV {
 	 * @author Andrew Ferguson
 	 * @return Bible passage
 	*/
-	function get_passage($passage){
+	function get_passage($passage, $include_passage_references, $copyright){
 		if (FALSE === $passage) {
 			return;
 		}
 		
-		return $this->query_source($this->build_query($passage), "passageQuery");
+		$get_passage = $this->query_source($this->build_query($passage, $include_passage_references, $copyright), "passageQuery");
 		if($get_passage != -1){
 			return $get_passage;
 		}
@@ -81,12 +84,23 @@ Class Fergcorp_ESV {
 	}
 	
 	
-	function build_query($passage){
+	function build_query($passage, $include_passage_references, $copyright){
+		
+		if($copyright != "short"){
+			$include_copyright = true;
+			$include_short_copyright = false;
+		}
+		else{
+			$include_copyright = false;
+			$include_short_copyright = true;
+		}
+		
 		$query = array(	'key'=>$this->ESV_KEY,
 						'passage'=>$passage,
+						'include-passage-references' => $include_passage_references,
 						'include-audio-link'=>'false',
-						'include-copyright'=>'true',
-						'include-short-copyright'=>'false'
+						'include-copyright'=> $include_copyright,
+						'include-short-copyright'=> $include_short_copyright
 					);
 		return http_build_query($query);
 		
