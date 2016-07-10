@@ -84,17 +84,20 @@ Class Fergcorp_ESV {
 		
 	}
 	
+	
+	
 	function query_source($query, $action){
 		
-		$ch = curl_init();
-		curl_setopt($ch, CURLOPT_URL, "$this->ESV_BASE_URL$action/?$query");
-		curl_setopt($ch, CURLOPT_VERBOSE, false);
-		curl_setopt($ch, CURLOPT_HEADER, false);
-		curl_setopt($ch, CURLOPT_RETURNTRANSFER, true);
-		$txt = trim(curl_exec($ch));
-		curl_close($ch);
+		$url = $this->ESV_BASE_URL . $action . "?"	. $query;
 		
-		return $txt;
+		$response = wp_remote_get( $url );
+		
+		if( is_array($response) ) {
+		  $header = $response['headers']; // array of http header lines
+		  $body = $response['body']; // use the content
+		}
+		
+		return $body;
 		
 	}
 	
