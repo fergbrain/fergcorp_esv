@@ -25,7 +25,8 @@ Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA 02110-1301, USA.
 Class Fergcorp_ESV {
 	
 	private $ESV_BASE_URL	= "http://www.esvapi.org/v2/rest/";
-	private $ESV_KEY			= "IP";
+	private $ESV_KEY		= "IP";
+	private $NO_RESULT		= "ERROR: No results were found for your search.";
 	
 	/**
 	 * Default construct to initialize settings required no matter what
@@ -36,6 +37,7 @@ Class Fergcorp_ESV {
 	 */
 	public function __construct(){
 		add_shortcode('esv', array ( &$this, 'shortcode_esv' ) );
+		add_action( 'admin_print_footer_scripts', array(&$this, 'add_quicktags' ));
 	}
 
 	/**
@@ -50,9 +52,12 @@ Class Fergcorp_ESV {
 	function shortcode_esv($atts) {
 		extract(shortcode_atts(array(
 								'passage' => FALSE,
+								'include_passage_references' => TRUE,
+								'copyright' => 'long'
+								
 								),
 								$atts));
-		return $this->get_passage($passage);
+		return $this->get_passage($passage, $include_passage_references, $copyright);
 	}
 	
 	/**
@@ -64,39 +69,129 @@ Class Fergcorp_ESV {
 	 * @author Andrew Ferguson
 	 * @return Bible passage
 	*/
-	function get_passage($passage){
+	function get_passage($passage, $include_passage_references, $copyright){
 		if (FALSE === $passage) {
 			return;
 		}
 		
-		return $this->query_source($this->build_query($passage), "passageQuery");
+		$get_passage = $this->query_source($this->build_query($passage, $include_passage_references, $copyright), "passageQuery");
+		if($get_passage != -1){
+			return $get_passage;
+		}
+		else{
+			return $passage;
+		}
 	}
 	
 	
-	function build_query($passage){
+	function build_query($passage, $include_passage_references, $copyright){
+		
+		if($copyright != "short"){
+			$include_copyright = true;
+			$include_short_copyright = false;
+		}
+		else{
+			$include_copyright = false;
+			$include_short_copyright = true;
+		}
+		
 		$query = array(	'key'=>$this->ESV_KEY,
 						'passage'=>$passage,
+						'include-passage-references' => $include_passage_references,
 						'include-audio-link'=>'false',
-						'include-copyright'=>'true',
-						'include-short-copyright'=>'false'
+						'include-copyright'=> $include_copyright,
+						'include-short-copyright'=> $include_short_copyright
 					);
 		return http_build_query($query);
 		
 	}
 	
+	
+	
 	function query_source($query, $action){
 		
-		$ch = curl_init();
-		curl_setopt($ch, CURLOPT_URL, "$this->ESV_BASE_URL$action/?$query");
-		curl_setopt($ch, CURLOPT_VERBOSE, false);
-		curl_setopt($ch, CURLOPT_HEADER, false);
-		curl_setopt($ch, CURLOPT_RETURNTRANSFER, true);
-		$txt = trim(curl_exec($ch));
-		curl_close($ch);
+		$url = $this->ESV_BASE_URL . $action . "?"	. $query;
 		
-		return $txt;
+		$response = wp_remote_get( $url );
+		
+		if( is_array($response) ) {
+		  $header = $response['headers']; // array of http header lines
+		  $body = $response['body']; // use the content
+		}
+		
+		if($body == $this->NO_RESULT)
+			return -1;
+		else{
+			return $body;
+		}
+		
 		
 	}
+	
+	// add more buttons to the html editor
+	function add_quicktags() {
+	    if (wp_script_is('quicktags')){
+	?>
+	    <script type="text/javascript">
+		// http://wordpress.stackexchange.com/questions/41422/functional-quicktag
+		// https://gist.github.com/zoerooney/755226cc8271f468037e
+		// Add a button called 'abbr' with a callback function
+		    QTags.addButton( 'esv', 'ESV', esv_prompt );
+		    // and this is the callback function
+		    function esv_prompt(e, c, ed) {
+		        var prmt, t = this;
+		        if ( ed.canvas.selectionStart !== ed.canvas.selectionEnd ) {
+		            // if we have a selection in the editor define out tagStart and tagEnd to wrap around the text
+		            // prompt the user for the abbreviation and return gracefully on a null input
+		            selection = ed.canvas.value.substring  (ed.canvas.selectionStart, ed.canvas.selectionEnd);
+		            if ( selection === null ) return;
+		            t.tagStart = '[esv passage="';
+		            t.tagEnd = '"]';
+		        } else if ( ed.openTags ) {
+		            // if we have an open tag, see if it's ours
+		            var ret = false, i = 0, t = this;
+		            while ( i < ed.openTags.length ) {
+		                ret = ed.openTags[i] == t.id ? i : false;
+		                i ++;
+		            }
+		            if ( ret === false ) {
+		                // if the open tags don't include 'abbr' prompt for input
+		                prmt = prompt('Enter Passage (e.g. Luke 1:15-20)');
+		                if ( prmt === null ) return;
+		            	t.tagStart = '[esv passage="' + prmt + '"]';
+		                t.tagEnd = false;
+		                if ( ! ed.openTags ) {
+		                    ed.openTags = [];
+		                }
+		                ed.openTags.push(t.id);
+		                e.value = '/' + e.value;
+		            } else {
+		                // otherwise close the 'abbr' tag
+		                ed.openTags.splice(ret, 1);
+		                t.tagStart = '</abbr>';
+		                e.value = t.display;
+		            }
+		        } else {
+		            // last resort, no selection and no open tags
+		            // so prompt for input and just open the tag
+		            prmt = prompt('Enter Passage (e.g. Luke 1:15-20)');
+		            if ( prmt === null ) return;
+	            	t.tagStart = '[esv passage="' + prmt + '"]';
+	                t.tagEnd = false;
+		            if ( ! ed.openTags ) {
+		                ed.openTags = [];
+		            }
+		            ed.openTags.push(t.id);
+		            e.value = '/' + e.value;
+		        }
+		        // now we've defined all the tagStart, tagEnd and openTags we process it all to the active window
+		        QTags.TagButton.prototype.callback.call(t, e, c, ed);
+		    };
+		</script>
+	<?php
+	    }
+	}
+	
 	
 	/*
 	protected function getBiblePassage ($query_string = '', $error_message = 'ERROR: Could not retrieve readings') {
